@@ -24,7 +24,29 @@ void DrawCentroids(cv::Mat canvas, const Region &rle) {
   }
 }
 
-int main(int argc, char **argv) {
+void func() {
+  cv::Mat1b mat(2, 13);
+  mat << 255, 240, 255, 0, 255, 0, 0, 255, 255, 240, 255, 0, 0, 0, 0, 255, 0, 0,
+      255, 0, 0, 255, 0, 0, 255, 255;
+  /* std::cout << mat << std::endl; */
+  PRINT_VAL(mat);
+
+  Region r;
+  const int iter = 100;
+  {
+    // print result
+    ThresholdAndEncode(mat, r, 127, 256);
+  }
+
+  cv::Mat m_out = cv::Mat::zeros(mat.rows, mat.cols, CV_8UC1);
+
+  Decode(r, m_out);
+  /* simdblob::PaintRegion(r, m_out, m_out, 255,
+   * simdblob::PaintRegionType::kFill); */
+  PRINT_VAL(m_out);
+}
+
+void func2() {
   auto image = cv::imread("E:/blob-optimize/data/Image_20230228163916267.bmp",
                           cv::IMREAD_GRAYSCALE);
 
@@ -57,9 +79,14 @@ int main(int argc, char **argv) {
     Decode(rle, decoded);
   }
 
-  DrawBBoxes(decoded, rle);
-  DrawCentroids(decoded, rle);
+  /* DrawBBoxes(decoded, rle); */
+  /* DrawCentroids(decoded, rle); */
 
   ImShowFitScreen(decoded, "decoded");
   cv::waitKey();
+}
+
+int main(int argc, char **argv) {
+  /* func(); */
+  func2();
 }

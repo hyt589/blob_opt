@@ -15,8 +15,8 @@ public:
   virtual ~Region();
 
 public:
-  uint16_t *run_x_pairs;
-  uint16_t *run_y;
+  int16_t *run_x_pairs;
+  int16_t *run_y;
   uint64_t run_count = 0;
 
   std::vector<int> run_labels;
@@ -26,10 +26,10 @@ public:
 
   uint64_t num_labels = 0;
   std::vector<uint64_t> area;
-  std::vector<uint16_t> top_left_x;
-  std::vector<uint16_t> top_left_y;
-  std::vector<uint16_t> bottom_right_x;
-  std::vector<uint16_t> bottom_right_y;
+  std::vector<int16_t> top_left_x;
+  std::vector<int16_t> top_left_y;
+  std::vector<int16_t> bottom_right_x;
+  std::vector<int16_t> bottom_right_y;
   std::vector<float> centroid_x;
   std::vector<float> centroid_y;
 

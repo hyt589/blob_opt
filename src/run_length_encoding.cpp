@@ -291,7 +291,34 @@ static const char mask128_epi8[256][16] = {
     0xf,
 };
 
+void printm128i_i8(__m128i m) {
+  for (int i = 0; i < 16; i++) {
+    std::cout << static_cast<int>(m.m128i_i8[i]) << ' ';
+  }
+  std::cout << std::endl;
+}
+
+void printm128i_i16(__m128i m) {
+  for (int i = 0; i < 8; i++) {
+    std::cout << static_cast<int>(m.m128i_i16[i]) << ' ';
+  }
+  std::cout << std::endl;
+}
+
+#define PRT_16(a)                                                              \
+  do {                                                                         \
+    std::cout << #a << ":" << std::endl;                                       \
+    printm128i_i16(a);                                                         \
+  } while (0);
+
+#define PRT_8(a)                                                               \
+  do {                                                                         \
+    std::cout << #a << ":" << std::endl;                                       \
+    printm128i_i8((a));                                                        \
+  } while (0);
+
 int16_t *_mm_compress_storeu_m16_epi16(int16_t *p, __m128i v, __m128i m) {
+
   m = _mm_packs_epi16(m, _mm_setzero_si128());
 
   int mi = _mm_movemask_epi8(m);
@@ -306,8 +333,8 @@ int16_t *_mm_compress_storeu_m16_epi16(int16_t *p, __m128i v, __m128i m) {
   return p + __builtin_popcount(mi);
 }
 
-int16_t *threshold_line_segment_simd(const int w, uint8_t *X, int16_t *RLC,
-                                     int16_t low, int16_t high) {
+int16_t *threshold_line_simd(const int w, uint8_t *X, int16_t *RLC, int16_t low,
+                             int16_t high) {
   __m128i last = _mm_setzero_si128();
   __m128i incr8 = _mm_set1_epi16(8);
   __m128i J = _mm_set_epi16(7, 6, 5, 4, 3, 2, 1, 0);
@@ -334,8 +361,30 @@ int16_t *threshold_line_segment_simd(const int w, uint8_t *X, int16_t *RLC,
     RLC = _mm_compress_storeu_m16_epi16(RLC, J, f);
     J = _mm_add_epi16(J, incr8);
   }
-  *RLC++ = w;
+
+  if (w % 8 == 0 && X[w - 1] != 0) {
+    *RLC++ = w;
+  }
   return RLC;
+}
+
+void threshold_encode_simd(const cv::Mat image, Region &region,
+                           const uint8_t lo, const uint8_t hi) {
+  auto height = image.size().height;
+  auto width = image.size().width;
+  region.image_height = height;
+  region.image_width = width;
+  auto rlc = region.run_x_pairs;
+  region.run_count = 0;
+  auto last_rlc = rlc;
+  for (int i = 0; i < height; i++) {
+    rlc = threshold_line_simd(width, image.data + i * width, rlc, lo, hi);
+    auto len = static_cast<int>(rlc - region.run_x_pairs) / 2;
+    for (int j = region.run_count; j < len; j++) {
+      region.run_y[j] = i;
+    }
+    region.run_count = len;
+  }
 }
 
 void encode_inner(const cv::Mat &image, Region &region, int start_row,
@@ -504,8 +553,8 @@ Region::Region() {
   *m_ref_count = 1;
 
   run_x_pairs =
-      static_cast<uint16_t *>(malloc(sizeof(uint16_t) * 2 * MaxRunCount));
-  run_y = static_cast<uint16_t *>(malloc(sizeof(uint16_t) * MaxRunCount));
+      static_cast<int16_t *>(malloc(sizeof(int16_t) * 2 * MaxRunCount));
+  run_y = static_cast<int16_t *>(malloc(sizeof(int16_t) * MaxRunCount));
 }
 
 Region::Region(const Region &other) {
@@ -555,14 +604,14 @@ Region::~Region() {
 
 void ThresholdAndEncode(const cv::Mat image, Region &encoded_region,
                         const uint8_t lo, const uint8_t hi) {
-  threshold(image, encoded_region, lo, hi);
-  /* threshold_encode_simd(image.size().width, image.data,
-   * encoded_region.run_x_pairs, lo, hi); */
+  /* threshold(image, encoded_region, lo, hi); */
+
   // TODO(hyt): use simd
+  threshold_encode_simd(image, encoded_region, lo, hi);
 }
 
 void Encode(const cv::Mat image, Region &dst) {
   encode_inner(image, dst, 0, image.rows);
 }
 
-void Decode(const Region &region, cv::Mat &dst) { decode_label(region, dst); }
+void Decode(const Region &region, cv::Mat &dst) { decode_binary(region, dst); }

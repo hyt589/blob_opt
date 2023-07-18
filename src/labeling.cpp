@@ -10,7 +10,7 @@
 #include <vector>
 
 namespace {
-int LabelRuns(const uint16_t *run_x_pairs, const uint16_t *run_y, int len,
+int LabelRuns(const int16_t *run_x_pairs, const int16_t *run_y, int len,
               int *labels, int offset) {
   int idxLabel = 1;
   int curRowIdx = 0;
@@ -72,9 +72,9 @@ void ComputeLabelStatsSequential(Region &region) {
 
   region.area.assign(region.num_labels, 0);
   region.top_left_x.assign(region.num_labels,
-                           std::numeric_limits<uint16_t>::max());
+                           std::numeric_limits<int16_t>::max());
   region.top_left_y.assign(region.num_labels,
-                           std::numeric_limits<uint16_t>::max());
+                           std::numeric_limits<int16_t>::max());
   region.bottom_right_x.assign(region.num_labels, 0);
   region.bottom_right_y.assign(region.num_labels, 0);
   region.centroid_x.assign(region.num_labels, 0);
