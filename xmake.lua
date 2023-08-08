@@ -2,6 +2,7 @@ add_rules("mode.debug", "mode.release")
 
 add_requires("opencv 4.5.5")
 add_requires("openmp")
+add_requires("range-v3")
 
 target("blob")
     set_kind("binary")
@@ -9,6 +10,7 @@ target("blob")
     add_files("src/*.cpp")
     add_packages("opencv")
     add_packages("openmp")
+    add_packages("range-v3")
 
 --
 -- If you want to known more usage about xmake, please see https://xmake.io

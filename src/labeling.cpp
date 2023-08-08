@@ -5,7 +5,6 @@
 #include <algorithm>
 #include <execution>
 #include <limits>
-#include <stdint.h>
 #include <type_traits>
 #include <vector>
 
@@ -116,3 +115,34 @@ int RunBasedLabeling(Region &region) {
 }
 
 void ComputeStatsAfter(Region &region) { ComputeLabelStatsSequential(region); }
+
+std::vector<uint64_t> SortLabels(const Region &region, const Metric metric) {
+  std::vector<uint64_t> indices;
+  indices.resize(region.num_labels);
+  for (size_t i = 0; i < indices.size(); i++) {
+    indices[i] = i;
+  }
+  std::sort(indices.begin(), indices.end(),
+            [&](const uint64_t a, const uint64_t b) {
+              switch (metric) {
+              case Metric::kArea:
+                return region.area[a] < region.area[b];
+                break;
+              case Metric::kCentroidX:
+                return region.centroid_x[a] < region.centroid_x[b];
+                break;
+              case Metric::kCentroidY:
+                return region.centroid_y[a] < region.centroid_y[b];
+                break;
+              case Metric::kHeight:
+                return (region.top_left_y[a] - region.bottom_right_y[a]) <
+                       (region.top_left_y[b] - region.bottom_right_y[b]);
+                break;
+              case Metric::kWidth:
+                return (region.top_left_x[a] - region.bottom_right_x[a]) <
+                       (region.top_left_x[b] - region.bottom_right_x[b]);
+                break;
+              }
+            });
+  return indices;
+}

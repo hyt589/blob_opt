@@ -1,6 +1,7 @@
 #include "run_length_encoding.h"
 #include "clock.h"
 #include "defines.h"
+#include "opencv2/core/types.hpp"
 #include <opencv2/opencv.hpp>
 #include <smmintrin.h>
 #include <stdint.h>
@@ -333,8 +334,14 @@ int16_t *_mm_compress_storeu_m16_epi16(int16_t *p, __m128i v, __m128i m) {
   return p + __builtin_popcount(mi);
 }
 
+template <typename V, typename B>
+inline bool in_range(const V val, const B lo, const B hi) {
+  return val >= lo && val < hi;
+}
+
 int16_t *threshold_line_simd(const int w, uint8_t *X, int16_t *RLC, int16_t low,
                              int16_t high) {
+  auto start = RLC;
   __m128i last = _mm_setzero_si128();
   __m128i incr8 = _mm_set1_epi16(8);
   __m128i J = _mm_set_epi16(7, 6, 5, 4, 3, 2, 1, 0);
@@ -362,21 +369,20 @@ int16_t *threshold_line_simd(const int w, uint8_t *X, int16_t *RLC, int16_t low,
     J = _mm_add_epi16(J, incr8);
   }
 
-  if (w % 8 == 0 && X[w - 1] != 0) {
+  if (((RLC - start) % 2) != 0 && in_range(X[w - 1], low, high)) {
     *RLC++ = w;
   }
   return RLC;
 }
 
 void threshold_encode_simd(const cv::Mat image, Region &region,
-                           const uint8_t lo, const uint8_t hi) {
+                           const int16_t lo, const int16_t hi) {
   auto height = image.size().height;
   auto width = image.size().width;
   region.image_height = height;
   region.image_width = width;
   auto rlc = region.run_x_pairs;
   region.run_count = 0;
-  auto last_rlc = rlc;
   for (int i = 0; i < height; i++) {
     rlc = threshold_line_simd(width, image.data + i * width, rlc, lo, hi);
     auto len = static_cast<int>(rlc - region.run_x_pairs) / 2;
@@ -428,20 +434,20 @@ void threshold2(const cv::Mat &image, Region &region, int start_row,
     int j = 0;
     int blob_start;
     do {
-      while (j < image.cols && (first[j] < MinGray || first[j] > MaxGray)) {
+      while (j < image.cols && (first[j] <= MinGray || first[j] >= MaxGray)) {
         ++j;
       }
       if (j == image.cols) // ÅÐ¶ÏÊÇ·ñÔ½½ç
         break;
       blob_start = j;
       run_count++;
-      while (j < image.cols && (first[j] >= MinGray && first[j] <= MaxGray)) {
+      while (j < image.cols && (first[j] > MinGray && first[j] < MaxGray)) {
         ++j;
       }
       {
         run_x_pairs[0] = blob_start;
         *run_y++ = i;
-        run_x_pairs[1] = j - 1;
+        run_x_pairs[1] = j;
         run_x_pairs += 2;
       }
     } while (image.cols != j);
@@ -513,14 +519,25 @@ void threshold(const cv::Mat &image, Region &dst, double lo, double hi) {
 void decode_binary(const Region &region, cv::Mat &image) {
   image = cv::Mat::zeros(region.image_height, region.image_width, CV_8UC1);
   for (int i = 0; i < region.run_count; i++) {
-    for (int j = region.run_x_pairs[2 * i]; j <= region.run_x_pairs[2 * i + 1];
+    for (int j = region.run_x_pairs[2 * i]; j < region.run_x_pairs[2 * i + 1];
          j++) {
       image.at<uchar>(region.run_y[i], j) = 255;
     }
   }
 }
 
-std::vector<cv::Point3_<uchar>> generateDistinguishableColors(int numColors) {
+void decode_edges(const Region &region, cv::Mat &image) {
+  image = cv::Mat::zeros(region.image_height, region.image_width, CV_8UC1);
+  image = 127;
+  for (int i = 0; i < region.run_count; i++) {
+    auto x1 = region.run_x_pairs[i * 2];
+    auto x2 = region.run_x_pairs[i * 2 + 1] - 1;
+    image.at<uchar>(region.run_y[i], x1) = 0;
+    image.at<uchar>(region.run_y[i], x2) = 255;
+  }
+}
+
+auto generateDistinguishableColors(int numColors) {
   std::vector<cv::Point3_<uchar>> colors;
   srand(time(0));
   for (int i = 0; i < numColors; i++) {
@@ -535,16 +552,19 @@ std::vector<cv::Point3_<uchar>> generateDistinguishableColors(int numColors) {
 void decode_label(const Region &region, cv::Mat &image) {
   auto colors = generateDistinguishableColors(region.num_labels);
   image = cv::Mat::zeros(region.image_height, region.image_width, CV_8UC3);
+  auto start = image.ptr<cv::Point3_<uchar>>();
   for (int i = 0; i < region.run_count; i++) {
-    for (int j = region.run_x_pairs[2 * i]; j <= region.run_x_pairs[2 * i + 1];
+    for (int j = region.run_x_pairs[2 * i]; j < region.run_x_pairs[2 * i + 1];
          j++) {
-      image.at<cv::Point3_<uchar>>(region.run_y[i], j) =
+      start[region.image_width * region.run_y[i] + j] =
           colors[region.run_labels[i]];
+      /* image.at<cv::Point3_<uchar>>(region.run_y[i], j) = */
+      /*     colors[region.run_labels[i]]; */
     }
   }
 }
 
-const static size_t MaxRunCount = 300000;
+const static size_t MaxRunCount = 3000000;
 
 } // namespace
 
@@ -603,7 +623,7 @@ Region::~Region() {
 }
 
 void ThresholdAndEncode(const cv::Mat image, Region &encoded_region,
-                        const uint8_t lo, const uint8_t hi) {
+                        const int16_t lo, const int16_t hi) {
   /* threshold(image, encoded_region, lo, hi); */
 
   // TODO(hyt): use simd
@@ -614,4 +634,4 @@ void Encode(const cv::Mat image, Region &dst) {
   encode_inner(image, dst, 0, image.rows);
 }
 
-void Decode(const Region &region, cv::Mat &dst) { decode_binary(region, dst); }
+void Decode(const Region &region, cv::Mat &dst) { decode_label(region, dst); }

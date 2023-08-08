@@ -1,11 +1,15 @@
 #pragma once
 
+#include <opencv2/opencv.hpp>
 #include <stdint.h>
 #include <vector>
 
-namespace cv {
-class Mat;
-}
+struct Blob {
+  int label;
+  cv::Point2f centroid;
+  uint64_t area;
+  std::vector<std::vector<cv::Point2f>> boundaries;
+};
 
 class Region final {
 public:
@@ -38,6 +42,6 @@ private:
 };
 
 void ThresholdAndEncode(const cv::Mat image, Region &encoded_region,
-                        const uint8_t lo, const uint8_t hi);
+                        const int16_t lo, const int16_t hi);
 void Encode(const cv::Mat image, Region &dst);
 void Decode(const Region &region, cv::Mat &dst);

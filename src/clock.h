@@ -11,9 +11,9 @@ public:
 
   ~Clock() {
     auto now = std::chrono::high_resolution_clock::now();
-    auto life_time = std::chrono::duration_cast<std::chrono::milliseconds>(
+    auto life_time = std::chrono::duration_cast<std::chrono::microseconds>(
         now - m_birth_time);
-    std::cout << m_name << " costs " << life_time.count() << " ms."
+    std::cout << m_name << " costs " << life_time.count() / 1000.f << " ms."
               << std::endl;
   }
 
